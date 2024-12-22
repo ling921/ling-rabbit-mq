@@ -1,26 +1,17 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
-using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
-using System.Threading.Channels;
 
 namespace Ling.RabbitMQ;
 
 /// <summary>
-/// Base class for RabbitMQ services, providing common functionality for connecting to RabbitMQ,
-/// declaring exchanges and queues, and serializing/deserializing messages.
+/// Provides a base class for RabbitMQ services, handling connection and channel management.
 /// </summary>
-public abstract class RabbitMQServiceBase : IAsyncDisposable
+public abstract class RabbitMQServiceBase : IDisposable, IAsyncDisposable
 {
-#if NET9_0_OR_GREATER
-    private static readonly JsonSerializerOptions _jsonerializerOptions = JsonSerializerOptions.Web;
-#else
-    private static readonly JsonSerializerOptions _jsonerializerOptions = new(JsonSerializerDefaults.Web);
-#endif
-
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
     private bool _disposed;
+    private bool _isOwnedConnection;
 
     /// <summary>
     /// Gets the logger instance.
@@ -28,273 +19,255 @@ public abstract class RabbitMQServiceBase : IAsyncDisposable
     protected ILogger Logger { get; }
 
     /// <summary>
-    /// Gets the RabbitMQ connection instance.
+    /// Gets the RabbitMQ connection configuration.
     /// </summary>
-    protected RabbitMQConnection Connection { get; }
+    protected RabbitMQOptions ConnectionConfig { get; }
+
+    /// <summary>
+    /// Gets the RabbitMQ connection instance.
+    /// <para>
+    /// Ensure to call <see cref="InitializeAsync(CancellationToken)"/> before using this property to prevent null value.
+    /// </para>
+    /// </summary>
+    protected IConnection Connection { get; private set; } = default!;
 
     /// <summary>
     /// Gets the RabbitMQ channel instance.
+    /// <para>
+    /// Ensure to call <see cref="InitializeAsync(CancellationToken)"/> before using this property to prevent null value.
+    /// </para>
     /// </summary>
     protected IChannel Channel { get; private set; } = default!;
 
     /// <summary>
-    /// Gets the retry policy for connection attempts.
+    /// Gets the message serializer instance.
     /// </summary>
-    protected virtual RetryPolicy RetryPolicy { get; }
+    protected IMessageSerializer Serializer { get; }
 
     /// <summary>
-    /// Gets the default properties for messages.
+    /// Gets the options for creating a channel.
     /// </summary>
-    protected virtual BasicProperties DefaultProperties => new()
-    {
-        Persistent = true,
-        DeliveryMode = DeliveryModes.Persistent,
-        MessageId = Guid.NewGuid().ToString(),
-        Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds())
-    };
+    protected virtual CreateChannelOptions? ChannelOptions { get; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQServiceBase"/> class with the specified connection.
     /// </summary>
     /// <param name="connection">The RabbitMQ connection.</param>
-    protected RabbitMQServiceBase(RabbitMQConnection connection)
+    protected RabbitMQServiceBase(IConnection connection)
     {
         Logger = NullLogger.Instance;
+        ConnectionConfig = default!;
         Connection = connection;
-        RetryPolicy = Connection.Configuration.RetryPolicy;
+        Serializer = new DefaultMessageSerializer();
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RabbitMQServiceBase"/> class with the specified connection configuration.
+    /// </summary>
+    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    protected RabbitMQServiceBase(RabbitMQOptions connectionConfig)
+    {
+        Logger = NullLogger.Instance;
+        ConnectionConfig = connectionConfig;
+        Serializer = new DefaultMessageSerializer();
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RabbitMQServiceBase"/> class with the specified connection configuration and serializer.
+    /// </summary>
+    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    /// <param name="serializer">The message serializer.</param>
+    protected RabbitMQServiceBase(RabbitMQOptions connectionConfig, IMessageSerializer serializer)
+    {
+        Logger = NullLogger.Instance;
+        ConnectionConfig = connectionConfig;
+        Serializer = serializer;
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQServiceBase"/> class with the specified
-    /// connection and logger factory.
+    /// connection configuration, serializer, and logger factory.
     /// </summary>
-    /// <param name="connection">The RabbitMQ connection.</param>
     /// <param name="loggerFactory">The logger factory.</param>
-    protected RabbitMQServiceBase(RabbitMQConnection connection, ILoggerFactory loggerFactory)
+    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    /// <param name="serializer">The message serializer.</param>
+    protected RabbitMQServiceBase(ILoggerFactory loggerFactory, RabbitMQOptions connectionConfig, IMessageSerializer serializer)
     {
         Logger = loggerFactory.CreateLogger(GetType());
-        Connection = connection;
-        RetryPolicy = Connection.Configuration.RetryPolicy;
+        ConnectionConfig = connectionConfig;
+        Serializer = serializer;
     }
 
     /// <summary>
-    /// Connects to RabbitMQ and initializes the channel.
+    /// Initializes the RabbitMQ connection and channel asynchronously.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task that represents the asynchronous connect operation.</returns>
-    [MemberNotNull(nameof(Channel))]
-    protected async Task ConnectAsync(CancellationToken cancellationToken = default)
+    protected async ValueTask InitializeAsync(CancellationToken cancellationToken)
     {
-        if (Channel?.IsOpen == true) return;
-
-#pragma warning disable CS8774 // Member must have a non-null value when exiting.
-
-        var attempt = 0;
-        var delay = RetryPolicy.InitialInterval;
-
-        while (true)
+        if (Connection is null)
         {
+            if (ConnectionConfig is null)
+            {
+                Logger.LogError("'ConnectionConfig' is not null");
+                throw new InvalidOperationException("'ConnectionConfig' cannot be null.");
+            }
+
+            await _semaphore.WaitAsync(cancellationToken);
+
             try
             {
-                Channel = await Connection.CreateChannelAsync(null, cancellationToken);
+                // Double-check pattern
+                if (Connection is null)
+                {
+                    var factory = new ConnectionFactory
+                    {
+                        HostName = ConnectionConfig.HostName,
+                        Port = ConnectionConfig.Port,
+                        VirtualHost = ConnectionConfig.VirtualHost,
+                        UserName = ConnectionConfig.UserName,
+                        Password = ConnectionConfig.Password,
+                        RequestedHeartbeat = TimeSpan.FromSeconds(ConnectionConfig.RequestedHeartbeat),
+                        AutomaticRecoveryEnabled = ConnectionConfig.AutomaticRecoveryEnabled,
+                        NetworkRecoveryInterval = TimeSpan.FromSeconds(ConnectionConfig.NetworkRecoveryInterval),
+                        ConsumerDispatchConcurrency = ConnectionConfig.ConsumerDispatchConcurrency,
+                    };
 
-                await OnConnectedAsync(cancellationToken);
+                    Connection = await factory.CreateConnectionAsync(cancellationToken);
+                    _isOwnedConnection = true;
 
-                return;
-            }
-            catch (Exception ex) when (attempt < RetryPolicy.MaxRetries)
-            {
-                attempt++;
-                Logger.LogWarning(ex,
-                    "Connection attempt {Attempt} failed. Retrying in {Delay} seconds...",
-                    attempt, delay.TotalSeconds);
-
-                await Task.Delay(delay, cancellationToken);
-                delay = TimeSpan.FromTicks(Math.Min(
-                    delay.Ticks * RetryPolicy.BackoffMultiplier,
-                    RetryPolicy.MaxInterval.Ticks));
-            }
-        }
-
-#pragma warning restore CS8774 // Member must have a non-null value when exiting.
-    }
-
-    /// <summary>
-    /// Called when the connection is established. Can be overridden in derived classes to perform
-    /// additional actions.
-    /// </summary>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task that represents the asynchronous operation.</returns>
-    protected virtual Task OnConnectedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-
-    /// <summary>
-    /// Asynchronously declares an exchange.
-    /// </summary>
-    /// <param name="exchange">The exchange name.</param>
-    /// <param name="type">The exchange type.</param>
-    /// <param name="durable">Whether the exchange is durable.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task that represents the asynchronous declare operation.</returns>
-    protected async Task DeclareExchangeAsync(
-        string exchange,
-        string type,
-        bool durable = true,
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrEmpty(exchange)) return;
-
-        try
-        {
-            await Channel.ExchangeDeclareAsync(
-                exchange: exchange,
-                type: type,
-                durable: durable,
-                autoDelete: false,
-                arguments: null,
-                cancellationToken: cancellationToken);
-
-            Logger.LogInformation("Exchange {Exchange} declared successfully", exchange);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to declare exchange {Exchange}", exchange);
-            throw;
-        }
-    }
-
-    /// <summary>
-    /// Asynchronously declares a queue.
-    /// </summary>
-    /// <param name="queue">The queue name.</param>
-    /// <param name="durable">Whether the queue is durable.</param>
-    /// <param name="arguments">Additional arguments for the queue declaration.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task that represents the asynchronous declare operation.</returns>
-    protected async Task DeclareQueueAsync(
-        string queue,
-        bool durable = true,
-        Dictionary<string, object?>? arguments = null,
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrEmpty(queue)) return;
-
-        try
-        {
-            await Channel.QueueDeclareAsync(
-                queue: queue,
-                durable: durable,
-                exclusive: false,
-                autoDelete: false,
-                arguments: arguments,
-                cancellationToken: cancellationToken);
-
-            Logger.LogInformation("Queue {Queue} declared successfully", queue);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to declare queue {Queue}", queue);
-            throw;
-        }
-    }
-
-    /// <summary>
-    /// Creates an asynchronous eventing basic consumer.
-    /// </summary>
-    /// <typeparam name="T">The type of the message.</typeparam>
-    /// <param name="handler">The handler to process the message.</param>
-    /// <param name="requeue">Whether to requeue the message in case of an error.</param>
-    /// <returns>The created asynchronous eventing basic consumer.</returns>
-    protected AsyncEventingBasicConsumer CreateConsumer<T>(
-        Func<T?, CancellationToken, Task> handler,
-        bool requeue)
-        where T : class
-    {
-        var consumer = new AsyncEventingBasicConsumer(Channel);
-
-        consumer.ReceivedAsync += async (_, ea) =>
-        {
-            try
-            {
-                var message = Deserialize<T>(ea.Body);
-
-                Logger.LogInformation(
-                    "Received message from exchange {Exchange}, routing key {RoutingKey}, basic properties {@BasicProperties}, message {message}",
-                    ea.Exchange,
-                    ea.RoutingKey,
-                    ea.BasicProperties,
-                    message);
-
-                await handler(message, ea.CancellationToken);
-
-                await Channel.BasicAckAsync(ea.DeliveryTag, false, ea.CancellationToken);
+                    Logger.LogInformation("RabbitMQ connection established successfully");
+                }
             }
             catch (Exception ex)
             {
-                Logger.LogError(
-                    ex,
-                    "Error processing message from exchange {Exchange}, routing key {RoutingKey}, basic properties {@BasicProperties}",
-                    ea.Exchange,
-                    ea.RoutingKey,
-                    ea.BasicProperties);
-
-                await Channel.BasicNackAsync(ea.DeliveryTag, false, requeue, ea.CancellationToken);
+                Logger.LogError(ex, "Failed to establish RabbitMQ connection");
+                throw;
             }
-        };
+            finally
+            {
+                _semaphore.Release();
+            }
+        }
 
-        return consumer;
+        if (Channel is null)
+        {
+            await _semaphore.WaitAsync(cancellationToken);
+
+            try
+            {
+                // Double-check pattern
+                if (Channel is null)
+                {
+                    Channel = await Connection.CreateChannelAsync(ChannelOptions, cancellationToken);
+
+                    Logger.LogInformation("RabbitMQ channel created successfully");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to create channel");
+                throw;
+            }
+            finally
+            {
+                _semaphore.Release();
+            }
+        }
+    }
+
+    #region Dispose
+
+    /// <summary>
+    /// Disposes the RabbitMQ connection and channel.
+    /// </summary>
+    /// <param name="disposing">A value indicating whether the method is being called from the Dispose method.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            if (disposing)
+            {
+                try
+                {
+                    if (Channel is not null)
+                    {
+                        Channel.Dispose();
+
+                        Logger.LogTrace("[sync] RabbitMQ channel disposed successfully");
+                    }
+
+                    if (_isOwnedConnection && Connection is not null)
+                    {
+                        Connection.Dispose();
+
+                        Logger.LogTrace("[sync] RabbitMQ connection disposed successfully");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error disposing RabbitMQ connection or channel");
+                }
+            }
+
+            _disposed = true;
+        }
     }
 
     /// <summary>
-    /// Serializes a message to a byte array.
+    /// Disposes the RabbitMQ connection and channel.
     /// </summary>
-    /// <typeparam name="T">The type of the message.</typeparam>
-    /// <param name="message">The message to serialize.</param>
-    /// <returns>The serialized message as a byte array.</returns>
-    protected virtual byte[] Serialize<T>(T message)
+    public void Dispose()
     {
-        return JsonSerializer.SerializeToUtf8Bytes(message, _jsonerializerOptions);
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
-    /// Deserializes a message from a byte array.
+    /// Disposes any additional resources asynchronously.
     /// </summary>
-    /// <typeparam name="T">The type of the message.</typeparam>
-    /// <param name="body">The byte array containing the message.</param>
-    /// <returns>The deserialized message.</returns>
-    [return: MaybeNull]
-    protected virtual T? Deserialize<T>(ReadOnlyMemory<byte> body)
+    /// <param name="disposing">A value indicating whether the method is being called from the DisposeAsync method.</param>
+    /// <returns>A task that represents the asynchronous dispose operation.</returns>
+    protected virtual async ValueTask DisposeAsync(bool disposing)
     {
-        return JsonSerializer.Deserialize<T>(body.Span, _jsonerializerOptions);
+        if (!_disposed)
+        {
+            if (disposing)
+            {
+                try
+                {
+                    if (Channel is not null)
+                    {
+                        await Channel.DisposeAsync();
+
+                        Logger.LogTrace("[async] RabbitMQ channel disposed successfully");
+                    }
+
+                    if (_isOwnedConnection && Connection is not null)
+                    {
+                        await Connection.DisposeAsync();
+
+                        Logger.LogTrace("[async] RabbitMQ connection disposed successfully");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error disposing RabbitMQ connection or channel");
+                }
+            }
+
+            _disposed = true;
+        }
     }
 
     /// <summary>
     /// Disposes the RabbitMQ connection and channel asynchronously.
     /// </summary>
     /// <returns>A task that represents the asynchronous dispose operation.</returns>
-    public virtual async ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
-        if (_disposed) return;
-
-        try
-        {
-            if (Connection is not null)
-            {
-                await Connection.DisposeAsync();
-            }
-            if (Channel is not null)
-            {
-                await Channel.DisposeAsync();
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Error disposing RabbitMQ connection");
-        }
-        finally
-        {
-            _disposed = true;
-        }
-
+        await DisposeAsync(true);
         GC.SuppressFinalize(this);
     }
+
+    #endregion
 }
