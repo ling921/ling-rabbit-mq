@@ -4,7 +4,7 @@ using RabbitMQ.Client;
 namespace Ling.RabbitMQ.Producers;
 
 /// <summary>
-/// Interface for a service that handles publish-subscribe pattern in RabbitMQ.
+/// Interface for a service that handles the publish-subscribe pattern in RabbitMQ.
 /// </summary>
 public interface IPubSubProducer
 {
@@ -14,6 +14,7 @@ public interface IPubSubProducer
     /// <typeparam name="T">The type of the message.</typeparam>
     /// <param name="exchange">The exchange name.</param>
     /// <param name="message">The message to publish.</param>
+    /// <param name="durable">Indicates whether the message should be durable.</param>
     /// <param name="configureProperties">Optional action to configure message properties.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that represents the asynchronous publish operation.</returns>
@@ -22,27 +23,45 @@ public interface IPubSubProducer
         T message,
         bool durable = true,
         Action<IBasicProperties>? configureProperties = null,
-        CancellationToken cancellationToken = default)
-        where T : class;
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// Implementation of <see cref="IPubSubProducer"/> that handles publish-subscribe pattern in RabbitMQ.
+/// Implementation of <see cref="IPubSubProducer"/> that handles the publish-subscribe pattern in RabbitMQ.
 /// </summary>
 public class PubSubProducer : ProducerBase, IPubSubProducer
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PubSubProducer"/> class with the specified connection.
+    /// </summary>
+    /// <param name="connection">The RabbitMQ connection.</param>
     public PubSubProducer(IConnection connection) : base(connection)
     {
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PubSubProducer"/> class with the specified connection configuration.
+    /// </summary>
+    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
     public PubSubProducer(RabbitMQOptions connectionConfig) : base(connectionConfig)
     {
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PubSubProducer"/> class with the specified connection configuration and message serializer.
+    /// </summary>
+    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    /// <param name="serializer">The message serializer.</param>
     public PubSubProducer(RabbitMQOptions connectionConfig, IMessageSerializer serializer) : base(connectionConfig, serializer)
     {
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PubSubProducer"/> class with the specified logger factory, connection configuration, and message serializer.
+    /// </summary>
+    /// <param name="loggerFactory">The logger factory.</param>
+    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    /// <param name="serializer">The message serializer.</param>
     public PubSubProducer(ILoggerFactory loggerFactory, RabbitMQOptions connectionConfig, IMessageSerializer serializer) : base(loggerFactory, connectionConfig, serializer)
     {
     }
@@ -54,7 +73,6 @@ public class PubSubProducer : ProducerBase, IPubSubProducer
         bool durable = true,
         Action<IBasicProperties>? configureProperties = null,
         CancellationToken cancellationToken = default)
-        where T : class
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
 
@@ -63,7 +81,7 @@ public class PubSubProducer : ProducerBase, IPubSubProducer
             await Channel.ExchangeDeclareAsync(
                 exchange: exchange,
                 type: ExchangeType.Fanout,
-                durable: true,
+                durable: durable,
                 autoDelete: false,
                 arguments: null,
                 noWait: false,
@@ -81,11 +99,11 @@ public class PubSubProducer : ProducerBase, IPubSubProducer
                 body: body,
                 cancellationToken: cancellationToken);
 
-            Logger.LogInformation("Message published to {Exchange} with message: {@message}", exchange, message);
+            Logger.LogInformation("Message published to exchange '{Exchange}' with message: {@Message}", exchange, message);
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to publish message to {Exchange} with message: {@message}", exchange, message);
+            Logger.LogError(ex, "Failed to publish message to exchange '{Exchange}' with message: {@Message}", exchange, message);
             throw;
         }
     }

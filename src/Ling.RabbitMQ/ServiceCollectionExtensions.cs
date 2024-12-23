@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Ling.RabbitMQ;
 
@@ -19,11 +20,11 @@ public static class ServiceCollectionExtensions
         services.AddOptions<RabbitMQOptions>()
             .Configure(configure)
 #if NET8_0_OR_GREATER
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
-#else
-            .ValidateDataAnnotations();
+            .ValidateOnStart()
 #endif
+            ;
+
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<RabbitMQOptions>, RabbitMQOptionsValidator>());
 
         return new RabbitMQBuilder(services);
     }

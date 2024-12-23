@@ -3,6 +3,9 @@ using RabbitMQ.Client;
 
 namespace Ling.RabbitMQ.Producers;
 
+/// <summary>
+/// Interface for a service that handles topic exchanges in RabbitMQ.
+/// </summary>
 public interface ITopicsProducer
 {
     /// <summary>
@@ -12,6 +15,7 @@ public interface ITopicsProducer
     /// <param name="exchange">The exchange name.</param>
     /// <param name="topic">The topic.</param>
     /// <param name="message">The message to publish.</param>
+    /// <param name="durable">Indicates whether the message should be durable.</param>
     /// <param name="configureProperties">Optional action to configure message properties.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that represents the asynchronous publish operation.</returns>
@@ -21,8 +25,7 @@ public interface ITopicsProducer
         T message,
         bool durable = true,
         Action<IBasicProperties>? configureProperties = null,
-        CancellationToken cancellationToken = default)
-        where T : class;
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -30,28 +33,57 @@ public interface ITopicsProducer
 /// </summary>
 public class TopicsProducer : ProducerBase, ITopicsProducer
 {
+    /// <summary>
+    /// Gets the topic pattern verifier.
+    /// </summary>
     protected virtual ITopicPatternVerifier TopicPatternVerifier { get; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TopicsProducer"/> class with the specified connection.
+    /// </summary>
+    /// <param name="connection">The RabbitMQ connection.</param>
     public TopicsProducer(IConnection connection) : base(connection)
     {
         TopicPatternVerifier = new DefaultTopicPatternVerifier();
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TopicsProducer"/> class with the specified connection configuration.
+    /// </summary>
+    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
     public TopicsProducer(RabbitMQOptions connectionConfig) : base(connectionConfig)
     {
         TopicPatternVerifier = new DefaultTopicPatternVerifier();
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TopicsProducer"/> class with the specified connection configuration and message serializer.
+    /// </summary>
+    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    /// <param name="serializer">The message serializer.</param>
     public TopicsProducer(RabbitMQOptions connectionConfig, IMessageSerializer serializer) : base(connectionConfig, serializer)
     {
         TopicPatternVerifier = new DefaultTopicPatternVerifier();
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TopicsProducer"/> class with the specified logger factory, connection configuration, and message serializer.
+    /// </summary>
+    /// <param name="loggerFactory">The logger factory.</param>
+    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    /// <param name="serializer">The message serializer.</param>
     public TopicsProducer(ILoggerFactory loggerFactory, RabbitMQOptions connectionConfig, IMessageSerializer serializer) : base(loggerFactory, connectionConfig, serializer)
     {
         TopicPatternVerifier = new DefaultTopicPatternVerifier();
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TopicsProducer"/> class with the specified logger factory, connection configuration, message serializer, and topic pattern verifier.
+    /// </summary>
+    /// <param name="loggerFactory">The logger factory.</param>
+    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    /// <param name="serializer">The message serializer.</param>
+    /// <param name="topicPatternVerifier">The topic pattern verifier.</param>
     public TopicsProducer(ILoggerFactory loggerFactory, RabbitMQOptions connectionConfig, IMessageSerializer serializer, ITopicPatternVerifier topicPatternVerifier) : base(loggerFactory, connectionConfig, serializer)
     {
         TopicPatternVerifier = topicPatternVerifier;
@@ -65,7 +97,6 @@ public class TopicsProducer : ProducerBase, ITopicsProducer
         bool durable = true,
         Action<IBasicProperties>? configureProperties = null,
         CancellationToken cancellationToken = default)
-        where T : class
     {
         if (!TopicPatternVerifier.IsValid(topic, out var errorMessage))
         {
@@ -99,13 +130,13 @@ public class TopicsProducer : ProducerBase, ITopicsProducer
                 body: body,
                 cancellationToken: cancellationToken);
 
-            Logger.LogInformation("Message published to topic exchange {Exchange} with topic {Topic}",
-                exchange, topic);
+            Logger.LogInformation("Message published to topic exchange '{Exchange}' with topic '{Topic}' and message: {@Message}",
+                exchange, topic, message);
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to publish message to topic exchange {Exchange} with topic {Topic}",
-                exchange, topic);
+            Logger.LogError(ex, "Failed to publish message to topic exchange '{Exchange}' with topic '{Topic}' and message: {@Message}",
+                exchange, topic, message);
             throw;
         }
     }

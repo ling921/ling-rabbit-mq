@@ -5,17 +5,32 @@ using RabbitMQ.Client;
 namespace Ling.RabbitMQ.Consumers;
 
 /// <summary>
-/// Implementation of <see cref="IPubSubConsumer"/> that handles publish-subscribe pattern in RabbitMQ.
+/// Represents a base class for a RabbitMQ consumer that handles the publish-subscribe pattern.
 /// </summary>
+/// <typeparam name="TMessage">The type of the message.</typeparam>
 public abstract class PubSubConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
-    where TMessage : class
 {
+    /// <summary>
+    /// Gets the name of the exchange.
+    /// </summary>
     protected abstract string ExchangeName { get; }
 
-    protected PubSubConsumer(ILoggerFactory loggerFactory, IMessageSerializer serializer, IOptions<RabbitMQOptions> options) : base(loggerFactory, serializer, options)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PubSubConsumer{TMessage}"/> class.
+    /// </summary>
+    /// <param name="loggerFactory">The logger factory.</param>
+    /// <param name="serializer">The message serializer.</param>
+    /// <param name="options">The RabbitMQ options.</param>
+    protected PubSubConsumer(ILoggerFactory loggerFactory, IMessageSerializer serializer, IOptions<RabbitMQOptions> options)
+        : base(loggerFactory, serializer, options)
     {
     }
 
+    /// <summary>
+    /// Sets up the consumer asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that represents the asynchronous setup operation.</returns>
     protected override async Task SetupAsync(CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
@@ -31,7 +46,7 @@ public abstract class PubSubConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
                 noWait: false,
                 cancellationToken: cancellationToken);
 
-            // declare a server-named queue
+            // Declare a server-named queue
             var queueDeclareResult = await Channel.QueueDeclareAsync(cancellationToken: cancellationToken);
             var queueName = queueDeclareResult.QueueName;
 
@@ -53,11 +68,11 @@ public abstract class PubSubConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
                 consumer: consumer,
                 cancellationToken: cancellationToken);
 
-            Logger.LogInformation("Subscribed to {Exchange} with queue {Queue}", ExchangeName, queueName);
+            Logger.LogInformation("Successfully subscribed to exchange '{Exchange}' with queue '{Queue}'", ExchangeName, queueName);
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to subscribe to {Exchange}", ExchangeName);
+            Logger.LogError(ex, "Failed to subscribe to exchange '{Exchange}'", ExchangeName);
             throw;
         }
     }

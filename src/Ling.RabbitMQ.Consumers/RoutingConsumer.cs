@@ -1,26 +1,47 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
 
 namespace Ling.RabbitMQ.Consumers;
 
+/// <summary>
+/// Represents a base class for a RabbitMQ consumer that handles the routing pattern.
+/// </summary>
+/// <typeparam name="TMessage">The type of the message.</typeparam>
 public abstract class RoutingConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
-    where TMessage : class
 {
-    public abstract string ExchangeName { get; }
-    public abstract string[] RoutingKeys { get; }
+    /// <summary>
+    /// Gets the name of the exchange.
+    /// </summary>
+    protected abstract string ExchangeName { get; }
 
-    protected RoutingConsumer(ILoggerFactory loggerFactory, IMessageSerializer serializer, IOptions<RabbitMQOptions> options) : base(loggerFactory, serializer, options)
+    /// <summary>
+    /// Gets the routing keys.
+    /// </summary>
+    protected abstract string[] RoutingKeys { get; }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RoutingConsumer{TMessage}"/> class.
+    /// </summary>
+    /// <param name="loggerFactory">The logger factory.</param>
+    /// <param name="serializer">The message serializer.</param>
+    /// <param name="options">The RabbitMQ options.</param>
+    protected RoutingConsumer(ILoggerFactory loggerFactory, IMessageSerializer serializer, IOptions<RabbitMQOptions> options)
+        : base(loggerFactory, serializer, options)
     {
     }
 
+    /// <summary>
+    /// Sets up the consumer asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that represents the asynchronous setup operation.</returns>
     protected override async Task SetupAsync(CancellationToken cancellationToken)
     {
         if (RoutingKeys is not { Length: > 0 })
         {
-            Logger.LogError("'RoutingKeys' is null or empty.");
-            throw new InvalidOperationException("'RoutingKeys' cannot be null or empty.");
+            Logger.LogError("Routing keys are null or empty.");
+            throw new InvalidOperationException("Routing keys cannot be null or empty.");
         }
 
         await InitializeAsync(cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
@@ -36,7 +57,7 @@ public abstract class RoutingConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
                 noWait: false,
                 cancellationToken: cancellationToken);
 
-            // declare a server-named queue
+            // Declare a server-named queue
             var queueDeclareResult = await Channel.QueueDeclareAsync(cancellationToken: cancellationToken);
             var queueName = queueDeclareResult.QueueName;
 
@@ -61,11 +82,11 @@ public abstract class RoutingConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
                 consumer: consumer,
                 cancellationToken: cancellationToken);
 
-            Logger.LogInformation("Subscribed to {Exchange} with queue {Queue} and routing key {RoutingKey}", ExchangeName, queueName, string.Join(", ", RoutingKeys));
+            Logger.LogInformation("Successfully subscribed to exchange '{Exchange}' with queue '{Queue}' and routing keys '{RoutingKeys}'", ExchangeName, queueName, string.Join(", ", RoutingKeys));
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to subscribe to {Exchange} and routing key {RoutingKey}", ExchangeName, string.Join(", ", RoutingKeys));
+            Logger.LogError(ex, "Failed to subscribe to exchange '{Exchange}' with routing keys '{RoutingKeys}'", ExchangeName, string.Join(", ", RoutingKeys));
             throw;
         }
     }

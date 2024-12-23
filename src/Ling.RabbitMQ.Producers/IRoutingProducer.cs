@@ -3,6 +3,9 @@ using RabbitMQ.Client;
 
 namespace Ling.RabbitMQ.Producers;
 
+/// <summary>
+/// Interface for a service that handles the routing pattern in RabbitMQ.
+/// </summary>
 public interface IRoutingProducer
 {
     /// <summary>
@@ -12,6 +15,7 @@ public interface IRoutingProducer
     /// <param name="exchange">The exchange name.</param>
     /// <param name="routingKey">The routing key.</param>
     /// <param name="message">The message to publish.</param>
+    /// <param name="durable">Indicates whether the message should be durable.</param>
     /// <param name="configureProperties">Optional action to configure message properties.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that represents the asynchronous publish operation.</returns>
@@ -21,24 +25,45 @@ public interface IRoutingProducer
         T message,
         bool durable = true,
         Action<IBasicProperties>? configureProperties = null,
-        CancellationToken cancellationToken = default)
-        where T : class;
+        CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Implementation of <see cref="IRoutingProducer"/> that handles the routing pattern in RabbitMQ.
+/// </summary>
 public class RoutingProducer : ProducerBase, IRoutingProducer
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RoutingProducer"/> class with the specified connection.
+    /// </summary>
+    /// <param name="connection">The RabbitMQ connection.</param>
     public RoutingProducer(IConnection connection) : base(connection)
     {
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RoutingProducer"/> class with the specified connection configuration.
+    /// </summary>
+    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
     public RoutingProducer(RabbitMQOptions connectionConfig) : base(connectionConfig)
     {
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RoutingProducer"/> class with the specified connection configuration and message serializer.
+    /// </summary>
+    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    /// <param name="serializer">The message serializer.</param>
     public RoutingProducer(RabbitMQOptions connectionConfig, IMessageSerializer serializer) : base(connectionConfig, serializer)
     {
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RoutingProducer"/> class with the specified logger factory, connection configuration, and message serializer.
+    /// </summary>
+    /// <param name="loggerFactory">The logger factory.</param>
+    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    /// <param name="serializer">The message serializer.</param>
     public RoutingProducer(ILoggerFactory loggerFactory, RabbitMQOptions connectionConfig, IMessageSerializer serializer) : base(loggerFactory, connectionConfig, serializer)
     {
     }
@@ -51,7 +76,6 @@ public class RoutingProducer : ProducerBase, IRoutingProducer
         bool durable = true,
         Action<IBasicProperties>? configureProperties = null,
         CancellationToken cancellationToken = default)
-        where T : class
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
 
@@ -78,13 +102,13 @@ public class RoutingProducer : ProducerBase, IRoutingProducer
                 body: body,
                 cancellationToken: cancellationToken);
 
-            Logger.LogInformation("Message published to {Exchange} with routing key {RoutingKey}",
-                exchange, routingKey);
+            Logger.LogInformation("Message published to exchange '{Exchange}' with routing key '{RoutingKey}' and message: {@Message}",
+                exchange, routingKey, message);
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to publish message to {Exchange} with routing key {RoutingKey}",
-                exchange, routingKey);
+            Logger.LogError(ex, "Failed to publish message to exchange '{Exchange}' with routing key '{RoutingKey}' and message: {@Message}",
+                exchange, routingKey, message);
             throw;
         }
     }

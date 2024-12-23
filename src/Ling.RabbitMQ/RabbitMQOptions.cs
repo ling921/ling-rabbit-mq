@@ -1,103 +1,113 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Microsoft.Extensions.Options;
 
 namespace Ling.RabbitMQ;
 
 /// <summary>
-/// Represents a RabbitMQ configuration.
+/// Represents the configuration options for RabbitMQ.
 /// </summary>
 public class RabbitMQOptions
 {
     /// <summary>
-    /// Gets or sets the RabbitMQ host name.
+    /// Gets or sets the RabbitMQ host name. Defaults to "localhost".
     /// </summary>
-    [Required(ErrorMessage = "HostName is required")]
     public string HostName { get; set; } = "localhost";
 
     /// <summary>
-    /// Gets or sets the RabbitMQ port.
+    /// Gets or sets the RabbitMQ port. Defaults to 5672.
     /// </summary>
-    [Range(1, 65535, ErrorMessage = "Port must be between 1 and 65535")]
     public int Port { get; set; } = 5672;
 
     /// <summary>
-    /// Gets or sets the RabbitMQ virtual host.
+    /// Gets or sets the RabbitMQ virtual host. Defaults to "/".
     /// </summary>
-    [Required(ErrorMessage = "VirtualHost is required")]
     public string VirtualHost { get; set; } = "/";
 
     /// <summary>
-    /// Gets or sets the user name.
+    /// Gets or sets the user name for RabbitMQ authentication. Defaults to "guest".
     /// </summary>
-    [Required(ErrorMessage = "UserName is required")]
     public string UserName { get; set; } = "guest";
+
     /// <summary>
-    /// Gets or sets the password.
+    /// Gets or sets the password for RabbitMQ authentication. Defaults to "guest".
     /// </summary>
-    [Required(ErrorMessage = "Password is required")]
     public string Password { get; set; } = "guest";
 
     /// <summary>
-    /// Gets or sets the requested heartbeat interval in seconds. 0 means disable heartbeats.
+    /// Gets or sets the requested heartbeat interval in seconds. 0 means disable heartbeats. Defaults to 60 seconds.
     /// </summary>
-    [Range(0, int.MaxValue, ErrorMessage = "RequestedHeartbeat must be greater than or equal to 0")]
     public int RequestedHeartbeat { get; set; } = 60;
 
     /// <summary>
-    /// Gets or sets a value indicating whether to automatically recover connections.
+    /// Gets or sets a value indicating whether to automatically recover connections. Defaults to true.
     /// </summary>
     public bool AutomaticRecoveryEnabled { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets the network recovery interval in seconds.
+    /// Gets or sets the network recovery interval in seconds. Defaults to 5 seconds.
     /// </summary>
-    [Range(0, int.MaxValue, ErrorMessage = "NetworkRecoveryInterval must be greater than or equal to 0")]
     public int NetworkRecoveryInterval { get; set; } = 5;
 
     /// <summary>
-    /// Gets or sets the consumer dispatch concurrency.
+    /// Gets or sets the consumer dispatch concurrency. Defaults to 1.
     /// </summary>
-    [Range(1, ushort.MaxValue)]
     public ushort ConsumerDispatchConcurrency { get; set; } = 1;
-
-    /// <summary>
-    /// Gets or sets the retry policy.
-    /// </summary>
-    public RetryPolicy RetryPolicy { get; set; } = RetryPolicy.Default;
 }
 
 /// <summary>
-/// Represents a retry policy configuration.
+/// Validates the <see cref="RabbitMQOptions"/>.
 /// </summary>
-public class RetryPolicy
+internal sealed class RabbitMQOptionsValidator : IValidateOptions<RabbitMQOptions>
 {
     /// <summary>
-    /// Gets the default retry policy.
+    /// Validates the specified <see cref="RabbitMQOptions"/>.
     /// </summary>
-    public static RetryPolicy Default => new()
+    /// <param name="name">The name of the options instance being validated.</param>
+    /// <param name="options">The options instance to validate.</param>
+    /// <returns>The result of the validation.</returns>
+    public ValidateOptionsResult Validate(string? name, RabbitMQOptions options)
     {
-        MaxAttempts = 3,
-        DelaySeconds = 1,
-        MaxDelaySeconds = 30,
-        Multiplier = 2
-    };
+        var errors = new List<string>();
 
-    /// <summary>
-    /// Gets or sets the maximum number of retry attempts.
-    /// </summary>
-    public int MaxAttempts { get; set; }
+        if (string.IsNullOrWhiteSpace(options.HostName))
+        {
+            errors.Add("HostName is required");
+        }
 
-    /// <summary>
-    /// Gets or sets the initial delay in seconds between retries.
-    /// </summary>
-    public int DelaySeconds { get; set; }
+        if (options.Port < 1 || options.Port > 65535)
+        {
+            errors.Add("Port must be between 1 and 65535");
+        }
 
-    /// <summary>
-    /// Gets or sets the maximum delay in seconds between retries.
-    /// </summary>
-    public int MaxDelaySeconds { get; set; }
+        if (string.IsNullOrWhiteSpace(options.VirtualHost))
+        {
+            errors.Add("VirtualHost is required");
+        }
 
-    /// <summary>
-    /// Gets or sets the multiplier for exponential backoff.
-    /// </summary>
-    public int Multiplier { get; set; }
+        if (string.IsNullOrWhiteSpace(options.UserName))
+        {
+            errors.Add("UserName is required");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.Password))
+        {
+            errors.Add("Password is required");
+        }
+
+        if (options.RequestedHeartbeat < 0)
+        {
+            errors.Add("RequestedHeartbeat must be greater than or equal to 0");
+        }
+
+        if (options.NetworkRecoveryInterval < 0)
+        {
+            errors.Add("NetworkRecoveryInterval must be greater than or equal to 0");
+        }
+
+        if (options.ConsumerDispatchConcurrency < 1 || options.ConsumerDispatchConcurrency > ushort.MaxValue)
+        {
+            errors.Add("ConsumerDispatchConcurrency must be between 1 and 65535");
+        }
+
+        return errors.Count > 0 ? ValidateOptionsResult.Fail(errors) : ValidateOptionsResult.Success;
+    }
 }

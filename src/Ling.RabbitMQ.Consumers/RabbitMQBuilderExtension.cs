@@ -4,92 +4,106 @@ using Microsoft.Extensions.Hosting;
 
 namespace Ling.RabbitMQ.Consumers;
 
+/// <summary>
+/// Provides extension methods for configuring RabbitMQ consumers.
+/// </summary>
 public static class RabbitMQBuilderExtensions
 {
     /// <summary>
-    /// Adds work queue services.
+    /// Adds a work queue consumer service.
     /// </summary>
-    /// <typeparam name="TConsumer">The type of the work queue service implementation.</typeparam>
+    /// <typeparam name="TConsumer">The type of the work queue consumer implementation.</typeparam>
+    /// <typeparam name="TMessage">The type of the message.</typeparam>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddWorkQueueConsumer<TConsumer, TMessage>(this IRabbitMQBuilder builder)
         where TConsumer : WorkQueueConsumer<TMessage>
-        where TMessage : class
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
-        builder.AddComsumer<TConsumer>();
+        builder.AddConsumer<TConsumer>();
 
         return builder;
     }
 
     /// <summary>
-    /// Adds direct exchange services.
+    /// Adds a direct exchange consumer service.
     /// </summary>
-    /// <typeparam name="TConsumer">The type of the direct exchange service implementation.</typeparam>
+    /// <typeparam name="TConsumer">The type of the direct exchange consumer implementation.</typeparam>
+    /// <typeparam name="TMessage">The type of the message.</typeparam>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddDirectExchangeConsumer<TConsumer, TMessage>(this IRabbitMQBuilder builder)
         where TConsumer : RoutingConsumer<TMessage>
-        where TMessage : class
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
-        builder.AddComsumer<TConsumer>();
+        builder.AddConsumer<TConsumer>();
 
         return builder;
     }
 
     /// <summary>
-    /// Adds topic exchange services.
+    /// Adds a topic exchange consumer service.
     /// </summary>
-    /// <typeparam name="TConsumer">The type of the topic exchange service implementation.</typeparam>
+    /// <typeparam name="TConsumer">The type of the topic exchange consumer implementation.</typeparam>
+    /// <typeparam name="TMessage">The type of the message.</typeparam>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddTopicExchangeConsumer<TConsumer, TMessage>(this IRabbitMQBuilder builder)
         where TConsumer : TopicsConsumer<TMessage>
-        where TMessage : class
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
         builder.Services.TryAddSingleton<ITopicPatternVerifier, DefaultTopicPatternVerifier>();
-        builder.AddComsumer<TConsumer>();
+        builder.AddConsumer<TConsumer>();
 
         return builder;
     }
 
     /// <summary>
-    /// Adds topic exchange services with a custom implementation.
+    /// Adds a topic exchange consumer service with a custom topic pattern verifier.
     /// </summary>
-    /// <typeparam name="TConsumer">The type of the topic exchange service implementation.</typeparam>
+    /// <typeparam name="TConsumer">The type of the topic exchange consumer implementation.</typeparam>
+    /// <typeparam name="TVerifier">The type of the topic pattern verifier implementation.</typeparam>
+    /// <typeparam name="TMessage">The type of the message.</typeparam>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddTopicExchangeConsumer<TConsumer, TVerifier, TMessage>(this IRabbitMQBuilder builder)
         where TConsumer : TopicsConsumer<TMessage>
         where TVerifier : class, ITopicPatternVerifier
-        where TMessage : class
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
         builder.Services.TryAddSingleton<ITopicPatternVerifier, TVerifier>();
-        builder.AddComsumer<TConsumer>();
+        builder.AddConsumer<TConsumer>();
 
         return builder;
     }
 
     /// <summary>
-    /// Adds publish-subscribe services.
+    /// Adds a publish-subscribe consumer service.
     /// </summary>
-    /// <typeparam name="TConsumer">The type of the pub-sub service implementation.</typeparam>
+    /// <typeparam name="TConsumer">The type of the publish-subscribe consumer implementation.</typeparam>
+    /// <typeparam name="TMessage">The type of the message.</typeparam>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddPubSubConsumer<TConsumer, TMessage>(this IRabbitMQBuilder builder)
         where TConsumer : PubSubConsumer<TMessage>
-        where TMessage : class
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
-        builder.AddComsumer<TConsumer>();
+        builder.AddConsumer<TConsumer>();
 
         return builder;
     }
 
-    private static void AddComsumer<TConsumer>(this IRabbitMQBuilder builder)
+    /// <summary>
+    /// Adds a consumer service to the RabbitMQ builder.
+    /// </summary>
+    /// <typeparam name="TConsumer">The type of the consumer implementation.</typeparam>
+    /// <param name="builder">The RabbitMQ builder.</param>
+    private static void AddConsumer<TConsumer>(this IRabbitMQBuilder builder)
         where TConsumer : class, IHostedService
     {
         builder.Services.TryAddSingleton<TConsumer>();

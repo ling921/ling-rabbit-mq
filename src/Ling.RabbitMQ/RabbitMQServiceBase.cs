@@ -73,18 +73,6 @@ public abstract class RabbitMQServiceBase : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RabbitMQServiceBase"/> class with the specified connection configuration and serializer.
-    /// </summary>
-    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
-    /// <param name="serializer">The message serializer.</param>
-    protected RabbitMQServiceBase(RabbitMQOptions connectionConfig, IMessageSerializer serializer)
-    {
-        Logger = NullLogger.Instance;
-        ConnectionConfig = connectionConfig;
-        Serializer = serializer;
-    }
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQServiceBase"/> class with the specified
     /// connection configuration, serializer, and logger factory.
     /// </summary>

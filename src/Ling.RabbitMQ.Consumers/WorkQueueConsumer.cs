@@ -5,19 +5,22 @@ using RabbitMQ.Client;
 namespace Ling.RabbitMQ.Consumers;
 
 /// <summary>
-/// Represents a consumer that reads messages from a work queue in RabbitMQ.
+/// Represents a base class for a RabbitMQ consumer that handles work queues.
 /// </summary>
-/// <typeparam name="TMessage"></typeparam>
+/// <typeparam name="TMessage">The type of the message.</typeparam>
 public abstract class WorkQueueConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
-    where TMessage : class
 {
     /// <summary>
-    /// Gets or sets the queue name.
+    /// Gets the name of the queue.
     /// </summary>
     protected abstract string QueueName { get; }
 
-    protected override bool AutoAck => false;
-
+    /// <summary>
+    /// Initializes a new instance of the <see cref="WorkQueueConsumer{TMessage}"/> class.
+    /// </summary>
+    /// <param name="loggerFactory">The logger factory.</param>
+    /// <param name="serializer">The message serializer.</param>
+    /// <param name="options">The RabbitMQ options.</param>
     protected WorkQueueConsumer(
         ILoggerFactory loggerFactory,
         IMessageSerializer serializer,
@@ -26,6 +29,11 @@ public abstract class WorkQueueConsumer<TMessage> : RabbitMQConsumerBase<TMessag
     {
     }
 
+    /// <summary>
+    /// Sets up the consumer asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that represents the asynchronous setup operation.</returns>
     protected override async Task SetupAsync(CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
@@ -52,11 +60,11 @@ public abstract class WorkQueueConsumer<TMessage> : RabbitMQConsumerBase<TMessag
                 consumer: consumer,
                 cancellationToken: cancellationToken);
 
-            Logger.LogInformation("Subscribed to queue {Queue}", QueueName);
+            Logger.LogInformation("Successfully subscribed to queue '{Queue}'", QueueName);
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to subscribe to {Queue}", QueueName);
+            Logger.LogError(ex, "Failed to subscribe to queue '{Queue}'", QueueName);
             throw;
         }
     }

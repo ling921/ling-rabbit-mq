@@ -17,13 +17,13 @@ public interface IRabbitMQBuilder
 /// <summary>
 /// Implementation of <see cref="IRabbitMQBuilder"/> for configuring RabbitMQ services.
 /// </summary>
-internal class RabbitMQBuilder : IRabbitMQBuilder
+internal sealed class RabbitMQBuilder : IRabbitMQBuilder
 {
     /// <inheritdoc/>
     public IServiceCollection Services { get; }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="IRabbitMQBuilder"/> class.
+    /// Initializes a new instance of the <see cref="RabbitMQBuilder"/> class.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> where RabbitMQ services are configured.</param>
     public RabbitMQBuilder(IServiceCollection services)
@@ -33,7 +33,12 @@ internal class RabbitMQBuilder : IRabbitMQBuilder
         Services.TryAddSingleton<IMessageSerializer, DefaultMessageSerializer>();
     }
 
-    public IRabbitMQBuilder UseSerializer<TSerializer>()
+    /// <summary>
+    /// Adds a custom message serializer to the RabbitMQ services.
+    /// </summary>
+    /// <typeparam name="TSerializer">The type of the custom message serializer.</typeparam>
+    /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
+    public IRabbitMQBuilder AddSerializer<TSerializer>()
         where TSerializer : class, IMessageSerializer
     {
         Services.Replace(ServiceDescriptor.Singleton<IMessageSerializer, TSerializer>());

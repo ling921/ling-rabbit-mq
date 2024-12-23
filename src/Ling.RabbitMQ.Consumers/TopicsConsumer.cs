@@ -4,14 +4,34 @@ using RabbitMQ.Client;
 
 namespace Ling.RabbitMQ.Consumers;
 
+/// <summary>
+/// Represents a base class for a RabbitMQ consumer that handles the topic exchange pattern.
+/// </summary>
+/// <typeparam name="TMessage">The type of the message.</typeparam>
 public abstract class TopicsConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
-    where TMessage : class
 {
+    /// <summary>
+    /// Gets the topic pattern verifier.
+    /// </summary>
     protected ITopicPatternVerifier TopicPatternVerifier { get; }
 
+    /// <summary>
+    /// Gets the name of the exchange.
+    /// </summary>
     protected abstract string ExchangeName { get; }
+
+    /// <summary>
+    /// Gets the binding keys.
+    /// </summary>
     protected abstract string[] BindingKeys { get; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TopicsConsumer{TMessage}"/> class.
+    /// </summary>
+    /// <param name="loggerFactory">The logger factory.</param>
+    /// <param name="serializer">The message serializer.</param>
+    /// <param name="options">The RabbitMQ options.</param>
+    /// <param name="topicPatternVerifier">The topic pattern verifier.</param>
     protected TopicsConsumer(
         ILoggerFactory loggerFactory,
         IMessageSerializer serializer,
@@ -22,20 +42,26 @@ public abstract class TopicsConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
         TopicPatternVerifier = topicPatternVerifier;
     }
 
+    /// <summary>
+    /// Sets up the consumer asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that represents the asynchronous setup operation.</returns>
     protected override async Task SetupAsync(CancellationToken cancellationToken)
     {
         if (BindingKeys is not { Length: > 0 })
         {
-            Logger.LogError("'BindingKeys' is null or empty.");
-            throw new InvalidOperationException("'BindingKeys' cannot be null or empty.");
+            Logger.LogError("Binding keys are null or empty.");
+            throw new InvalidOperationException("Binding keys cannot be null or empty.");
         }
+
         foreach (var bindingKey in BindingKeys)
         {
             if (!TopicPatternVerifier.IsValid(bindingKey, out var errorMessage))
             {
                 Logger.LogError("Invalid topic pattern for consumer: {ErrorMessage}, Exchange: {Exchange}, Topic: {Topic}",
                     errorMessage, ExchangeName, bindingKey);
-                throw new InvalidOperationException($"Topic '{bindingKey}' in 'BindingKeys' is not a valid pattern");
+                throw new InvalidOperationException($"Topic '{bindingKey}' in 'BindingKeys' is not a valid pattern.");
             }
         }
 
@@ -52,7 +78,7 @@ public abstract class TopicsConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
                 noWait: false,
                 cancellationToken: cancellationToken);
 
-            // declare a server-named queue
+            // Declare a server-named queue
             var queueDeclareResult = await Channel.QueueDeclareAsync(cancellationToken: cancellationToken);
             var queueName = queueDeclareResult.QueueName;
 
@@ -77,11 +103,11 @@ public abstract class TopicsConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
                 consumer: consumer,
                 cancellationToken: cancellationToken);
 
-            Logger.LogInformation("Subscribed to {Exchange} with queue {Queue} and routing key {RoutingKey}", ExchangeName, queueName, string.Join(", ", BindingKeys));
+            Logger.LogInformation("Successfully subscribed to exchange '{Exchange}' with queue '{Queue}' and binding keys '{BindingKeys}'", ExchangeName, queueName, string.Join(", ", BindingKeys));
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to subscribe to {Exchange} and routing key {RoutingKey}", ExchangeName, string.Join(", ", BindingKeys));
+            Logger.LogError(ex, "Failed to subscribe to exchange '{Exchange}' with binding keys '{BindingKeys}'", ExchangeName, string.Join(", ", BindingKeys));
             throw;
         }
     }

@@ -3,6 +3,9 @@ using System.Text.Json;
 
 namespace Ling.RabbitMQ;
 
+/// <summary>
+/// Defines methods for serializing and deserializing messages.
+/// </summary>
 public interface IMessageSerializer
 {
     /// <summary>
@@ -23,7 +26,10 @@ public interface IMessageSerializer
     T? Deserialize<T>(ReadOnlySpan<byte> messageBytes);
 }
 
-internal sealed partial class DefaultMessageSerializer : IMessageSerializer
+/// <summary>
+/// Default implementation of <see cref="IMessageSerializer"/> that uses System.Text.Json for serialization.
+/// </summary>
+internal sealed class DefaultMessageSerializer : IMessageSerializer
 {
 #if NET9_0_OR_GREATER
     private static readonly JsonSerializerOptions _jsonSerializerOptions = JsonSerializerOptions.Web;

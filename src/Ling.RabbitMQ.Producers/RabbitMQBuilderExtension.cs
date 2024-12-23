@@ -4,144 +4,161 @@ using Microsoft.Extensions.Options;
 
 namespace Ling.RabbitMQ.Producers;
 
+/// <summary>
+/// Provides extension methods for configuring RabbitMQ producers.
+/// </summary>
 public static class RabbitMQBuilderExtensions
 {
     /// <summary>
-    /// Adds work queue services.
+    /// Adds work queue producer services.
     /// </summary>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddWorkQueueProducer(this IRabbitMQBuilder builder)
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
         builder.AddProducerCore();
-        builder.Services.TryAddTransient<IWorkQueueProducer, WorkQueueProducer>();
+        builder.Services.TryAddScoped<IWorkQueueProducer, WorkQueueProducer>();
 
         return builder;
     }
 
     /// <summary>
-    /// Adds work queue services with a custom implementation.
+    /// Adds work queue producer services with a custom implementation.
     /// </summary>
-    /// <typeparam name="TProducer">The type of the work queue service implementation.</typeparam>
+    /// <typeparam name="TProducer">The type of the work queue producer implementation.</typeparam>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddWorkQueueProducer<TProducer>(this IRabbitMQBuilder builder) where TProducer : class, IWorkQueueProducer
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
         builder.AddProducerCore();
-        builder.Services.TryAddTransient<IWorkQueueProducer, TProducer>();
+        builder.Services.TryAddScoped<IWorkQueueProducer, TProducer>();
 
         return builder;
     }
 
     /// <summary>
-    /// Adds direct exchange services.
+    /// Adds routing producer services.
     /// </summary>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddRoutingProducer(this IRabbitMQBuilder builder)
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
         builder.AddProducerCore();
-        builder.Services.TryAddTransient<IRoutingProducer, RoutingProducer>();
+        builder.Services.TryAddScoped<IRoutingProducer, RoutingProducer>();
 
         return builder;
     }
 
     /// <summary>
-    /// Adds direct exchange services with a custom implementation.
+    /// Adds routing producer services with a custom implementation.
     /// </summary>
-    /// <typeparam name="TProducer">The type of the direct exchange service implementation.</typeparam>
+    /// <typeparam name="TProducer">The type of the routing producer implementation.</typeparam>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddRoutingProducer<TProducer>(this IRabbitMQBuilder builder) where TProducer : class, IRoutingProducer
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
         builder.AddProducerCore();
-        builder.Services.TryAddTransient<IRoutingProducer, TProducer>();
+        builder.Services.TryAddScoped<IRoutingProducer, TProducer>();
 
         return builder;
     }
 
     /// <summary>
-    /// Adds topic exchange services.
+    /// Adds topic exchange producer services.
     /// </summary>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddTopicsProducer(this IRabbitMQBuilder builder)
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
         builder.AddProducerCore();
         builder.Services.TryAddSingleton<ITopicPatternVerifier, DefaultTopicPatternVerifier>();
-        builder.Services.TryAddTransient<ITopicsProducer, TopicsProducer>();
+        builder.Services.TryAddScoped<ITopicsProducer, TopicsProducer>();
 
         return builder;
     }
 
     /// <summary>
-    /// Adds topic exchange services with a custom implementation.
+    /// Adds topic exchange producer services with a custom implementation.
     /// </summary>
-    /// <typeparam name="TProducer">The type of the topic exchange service implementation.</typeparam>
+    /// <typeparam name="TProducer">The type of the topic exchange producer implementation.</typeparam>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddTopicsProducer<TProducer>(this IRabbitMQBuilder builder) where TProducer : class, ITopicsProducer
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
         builder.AddProducerCore();
         builder.Services.TryAddSingleton<ITopicPatternVerifier, DefaultTopicPatternVerifier>();
-        builder.Services.TryAddTransient<ITopicsProducer, TProducer>();
+        builder.Services.TryAddScoped<ITopicsProducer, TProducer>();
 
         return builder;
     }
 
     /// <summary>
-    /// Adds topic exchange services with a custom implementation.
+    /// Adds topic exchange producer services with a custom implementation and a custom topic pattern verifier.
     /// </summary>
-    /// <typeparam name="TProducer">The type of the topic exchange service implementation.</typeparam>
+    /// <typeparam name="TProducer">The type of the topic exchange producer implementation.</typeparam>
+    /// <typeparam name="TVerifier">The type of the topic pattern verifier implementation.</typeparam>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddTopicsProducer<TProducer, TVerifier>(this IRabbitMQBuilder builder)
         where TProducer : class, ITopicsProducer
         where TVerifier : class, ITopicPatternVerifier
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
         builder.AddProducerCore();
         builder.Services.TryAddSingleton<ITopicPatternVerifier, TVerifier>();
-        builder.Services.TryAddTransient<ITopicsProducer, TProducer>();
+        builder.Services.TryAddScoped<ITopicsProducer, TProducer>();
 
         return builder;
     }
 
     /// <summary>
-    /// Adds publish-subscribe services.
+    /// Adds publish-subscribe producer services.
     /// </summary>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddPubSubProducer(this IRabbitMQBuilder builder)
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
         builder.AddProducerCore();
-        builder.Services.TryAddTransient<IPubSubProducer, PubSubProducer>();
+        builder.Services.TryAddScoped<IPubSubProducer, PubSubProducer>();
 
         return builder;
     }
 
     /// <summary>
-    /// Adds publish-subscribe services with a custom implementation.
+    /// Adds publish-subscribe producer services with a custom implementation.
     /// </summary>
-    /// <typeparam name="TProducer">The type of the pub-sub service implementation.</typeparam>
+    /// <typeparam name="TProducer">The type of the pub-sub producer implementation.</typeparam>
+    /// <param name="builder">The RabbitMQ builder.</param>
     /// <returns>The <see cref="IRabbitMQBuilder"/>.</returns>
     public static IRabbitMQBuilder AddPubSubProducer<TProducer>(this IRabbitMQBuilder builder) where TProducer : class, IPubSubProducer
     {
-        ThrowHelpers.ThrowIfNull(builder);
+        ThrowHelper.ThrowIfNull(builder);
 
         builder.AddProducerCore();
-        builder.Services.TryAddTransient<IPubSubProducer, TProducer>();
+        builder.Services.TryAddScoped<IPubSubProducer, TProducer>();
 
         return builder;
     }
 
+    /// <summary>
+    /// Adds core services required for RabbitMQ producers.
+    /// </summary>
+    /// <param name="builder">The RabbitMQ builder.</param>
     private static void AddProducerCore(this IRabbitMQBuilder builder)
     {
         builder.Services.TryAddSingleton(sp => sp.GetRequiredService<IOptions<RabbitMQOptions>>().Value);
