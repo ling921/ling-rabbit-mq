@@ -3,6 +3,7 @@ using RabbitMQ.Client.Events;
 using RabbitMQ.Client;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 
 namespace Ling.RabbitMQ.Consumers;
 
@@ -13,12 +14,12 @@ namespace Ling.RabbitMQ.Consumers;
 public abstract class RabbitMQConsumerBase<TMessage> : RabbitMQServiceBase, IHostedService
 {
     /// <summary>
-    /// Gets a value indicating whether to requeue the message in case of an error.
+    /// Gets a value indicating whether to requeue the message in case of an error. Defaults to <see langword="false"/>.
     /// </summary>
     protected virtual bool RequeueOnError { get; }
 
     /// <summary>
-    /// Gets a value indicating whether Quality of Service (QoS) is enabled.
+    /// Gets a value indicating whether Quality of Service (QoS) is enabled. Defaults to <see langword="false"/>.
     /// </summary>
     protected virtual bool IsQosEnabled { get; }
 
@@ -33,19 +34,19 @@ public abstract class RabbitMQConsumerBase<TMessage> : RabbitMQServiceBase, IHos
     protected virtual ushort PrefetchCount { get; } = 1;
 
     /// <summary>
-    /// Gets a value indicating whether the queue is durable. Defaults to true.
+    /// Gets a value indicating whether the queue is durable. Defaults to <see langword="true"/>.
     /// </summary>
     protected virtual bool Durable { get; } = true;
 
     /// <summary>
-    /// Gets the arguments for the queue. Defaults to null.
+    /// Gets the arguments for the queue. Defaults to <see langword="null"/>.
     /// </summary>
     protected virtual Dictionary<string, object?>? Arguments { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the message acknowledgment is automatic. Defaults to true.
+    /// Gets a value indicating whether the message acknowledgment is automatic. Defaults to <see langword="false"/>.
     /// </summary>
-    protected virtual bool AutoAck { get; } = true;
+    protected virtual bool AutoAck { get; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQConsumerBase{TMessage}"/> class.
@@ -131,9 +132,11 @@ public abstract class RabbitMQConsumerBase<TMessage> : RabbitMQServiceBase, IHos
 
         consumer.ReceivedAsync += async (_, ea) =>
         {
+            TMessage? message = default;
+
             try
             {
-                var message = Serializer.Deserialize<TMessage>(ea.Body.Span);
+                message = Serializer.Deserialize<TMessage>(ea.Body.Span);
 
                 Logger.LogDebug(
                     "Received message from exchange {Exchange}, routing key {RoutingKey}, basic properties {@BasicProperties}, message {@Message}",
@@ -141,13 +144,32 @@ public abstract class RabbitMQConsumerBase<TMessage> : RabbitMQServiceBase, IHos
                     ea.RoutingKey,
                     ea.BasicProperties,
                     message);
+            }
+            catch (JsonException ex)
+            {
+                Logger.LogError(
+                    ex,
+                    "JSON deserialization error for message from exchange {Exchange}, routing key {RoutingKey}, basic properties {@BasicProperties}",
+                    ea.Exchange,
+                    ea.RoutingKey,
+                    ea.BasicProperties);
 
+                await channel.BasicNackAsync(ea.DeliveryTag, false, false, ea.CancellationToken);
+                return;
+            }
+
+            try
+            {
                 await ConsumeAsync(message, ea.RoutingKey, ea.BasicProperties, ea.CancellationToken);
-                await channel.BasicAckAsync(ea.DeliveryTag, false, ea.CancellationToken);
+
+                if (!AutoAck)
+                {
+                    await channel.BasicAckAsync(ea.DeliveryTag, false, ea.CancellationToken);
+                }
             }
             catch (OperationCanceledException) when (ea.CancellationToken.IsCancellationRequested)
             {
-                await channel.BasicNackAsync(ea.DeliveryTag, false, true);
+                await channel.BasicNackAsync(ea.DeliveryTag, false, true, ea.CancellationToken);
                 Logger.LogWarning("Message {DeliveryTag} requeued due to cancellation", ea.DeliveryTag);
             }
             catch (Exception ex)
