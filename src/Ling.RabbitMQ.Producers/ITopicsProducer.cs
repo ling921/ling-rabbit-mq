@@ -48,43 +48,24 @@ public class TopicsProducer : ProducerBase, ITopicsProducer
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="TopicsProducer"/> class with the specified connection configuration.
+    /// Initializes a new instance of the <see cref="TopicsProducer"/> class with the specified connection, message serializer, and logger factory.
     /// </summary>
-    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
-    public TopicsProducer(RabbitMQOptions connectionConfig) : base(connectionConfig)
-    {
-        TopicPatternVerifier = new DefaultTopicPatternVerifier();
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="TopicsProducer"/> class with the specified connection configuration and message serializer.
-    /// </summary>
-    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    /// <param name="connection">The RabbitMQ connection.</param>
     /// <param name="serializer">The message serializer.</param>
-    public TopicsProducer(RabbitMQOptions connectionConfig, IMessageSerializer serializer) : base(connectionConfig, serializer)
+    /// <param name="loggerFactory">The logger factory.</param>
+    public TopicsProducer(IConnection connection, IMessageSerializer serializer, ILoggerFactory loggerFactory) : base(connection, serializer, loggerFactory)
     {
         TopicPatternVerifier = new DefaultTopicPatternVerifier();
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="TopicsProducer"/> class with the specified logger factory, connection configuration, and message serializer.
+    /// Initializes a new instance of the <see cref="TopicsProducer"/> class with the specified  connection, message serializer, topic pattern verifier, and logger factory.
     /// </summary>
-    /// <param name="loggerFactory">The logger factory.</param>
-    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
-    /// <param name="serializer">The message serializer.</param>
-    public TopicsProducer(ILoggerFactory loggerFactory, RabbitMQOptions connectionConfig, IMessageSerializer serializer) : base(loggerFactory, connectionConfig, serializer)
-    {
-        TopicPatternVerifier = new DefaultTopicPatternVerifier();
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="TopicsProducer"/> class with the specified logger factory, connection configuration, message serializer, and topic pattern verifier.
-    /// </summary>
-    /// <param name="loggerFactory">The logger factory.</param>
-    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    /// <param name="connection">The RabbitMQ connection.</param>
     /// <param name="serializer">The message serializer.</param>
     /// <param name="topicPatternVerifier">The topic pattern verifier.</param>
-    public TopicsProducer(ILoggerFactory loggerFactory, RabbitMQOptions connectionConfig, IMessageSerializer serializer, ITopicPatternVerifier topicPatternVerifier) : base(loggerFactory, connectionConfig, serializer)
+    /// <param name="loggerFactory">The logger factory.</param>
+    public TopicsProducer(IConnection connection, IMessageSerializer serializer, ITopicPatternVerifier topicPatternVerifier, ILoggerFactory loggerFactory) : base(connection, serializer, loggerFactory)
     {
         TopicPatternVerifier = topicPatternVerifier;
     }

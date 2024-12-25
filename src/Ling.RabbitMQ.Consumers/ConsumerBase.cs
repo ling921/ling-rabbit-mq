@@ -14,6 +14,11 @@ namespace Ling.RabbitMQ.Consumers;
 public abstract class RabbitMQConsumerBase<TMessage> : RabbitMQServiceBase, IHostedService
 {
     /// <summary>
+    /// Gets or sets the name of queue.
+    /// </summary>
+    protected virtual string? QueueName { get; set; }
+
+    /// <summary>
     /// Gets a value indicating whether to requeue the message in case of an error. Defaults to <see langword="false"/>.
     /// </summary>
     protected virtual bool RequeueOnError { get; }
@@ -49,6 +54,11 @@ public abstract class RabbitMQConsumerBase<TMessage> : RabbitMQServiceBase, IHos
     protected virtual bool AutoAck { get; }
 
     /// <summary>
+    /// Gets or sets the consumer tag. This tag is used to identify the consumer in RabbitMQ.
+    /// </summary>
+    protected string? ConsumerTag { get; set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQConsumerBase{TMessage}"/> class.
     /// </summary>
     /// <param name="loggerFactory">The logger factory.</param>
@@ -58,20 +68,37 @@ public abstract class RabbitMQConsumerBase<TMessage> : RabbitMQServiceBase, IHos
         ILoggerFactory loggerFactory,
         IMessageSerializer serializer,
         IOptions<RabbitMQOptions> options)
-        : base(loggerFactory, options.Value, serializer)
+        : base(options.Value, serializer, loggerFactory)
     {
     }
 
     /// <summary>
-    /// Starts the consumer.
+    /// Starts the RabbitMQ consumer.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that represents the asynchronous start operation.</returns>
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
-        Logger.LogInformation("Starting consumer {ConsumerType} for message type {MessageType}", GetType().Name, typeof(TMessage).Name);
+        if (Channel is { IsOpen: true } && !string.IsNullOrEmpty(QueueName))
+        {
+            Logger.LogInformation("Resubscribing consumer {ConsumerType} for message type {MessageType}", GetType().Name, typeof(TMessage).Name);
 
-        return SetupAsync(cancellationToken);
+            var consumer = CreateConsumer(Channel);
+
+            ConsumerTag = await Channel.BasicConsumeAsync(
+                queue: QueueName,
+                autoAck: AutoAck,
+                consumer: consumer,
+                cancellationToken: cancellationToken);
+
+            Logger.LogInformation("Consumer successfully resubscribed to queue '{Queue}'", QueueName);
+        }
+        else
+        {
+            Logger.LogInformation("Setting up consumer {ConsumerType} for message type {MessageType}", GetType().Name, typeof(TMessage).Name);
+
+            await SetupAsync(cancellationToken);
+        }
     }
 
     /// <summary>
@@ -83,7 +110,14 @@ public abstract class RabbitMQConsumerBase<TMessage> : RabbitMQServiceBase, IHos
     {
         Logger.LogInformation("Stopping consumer {ConsumerType} for message type {MessageType}", GetType().Name, typeof(TMessage).Name);
 
-        await Connection.DisposeAsync();
+        if (Channel is { IsOpen: true } && !string.IsNullOrEmpty(ConsumerTag))
+        {
+            await Channel.BasicCancelAsync(
+                consumerTag: ConsumerTag,
+                noWait: false,
+                cancellationToken: cancellationToken);
+            ConsumerTag = null;
+        }
     }
 
     /// <summary>

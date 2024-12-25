@@ -59,14 +59,14 @@ public abstract class RoutingConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
 
             // Declare a server-named queue
             var queueDeclareResult = await Channel.QueueDeclareAsync(cancellationToken: cancellationToken);
-            var queueName = queueDeclareResult.QueueName;
+            QueueName = queueDeclareResult.QueueName;
 
             await ApplyQosAsync(Channel, cancellationToken);
 
             foreach (var routingKey in RoutingKeys.Distinct())
             {
                 await Channel.QueueBindAsync(
-                    queue: queueName,
+                    queue: QueueName,
                     exchange: ExchangeName,
                     routingKey: routingKey,
                     arguments: null,
@@ -76,13 +76,13 @@ public abstract class RoutingConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
 
             var consumer = CreateConsumer(Channel);
 
-            await Channel.BasicConsumeAsync(
-                queue: queueName,
+            ConsumerTag = await Channel.BasicConsumeAsync(
+                queue: QueueName,
                 autoAck: AutoAck,
                 consumer: consumer,
                 cancellationToken: cancellationToken);
 
-            Logger.LogInformation("Successfully subscribed to exchange '{Exchange}' with queue '{Queue}' and routing keys '{RoutingKeys}'", ExchangeName, queueName, string.Join(", ", RoutingKeys));
+            Logger.LogInformation("Successfully subscribed to exchange '{Exchange}' with queue '{Queue}' and routing keys '{RoutingKeys}'", ExchangeName, QueueName, string.Join(", ", RoutingKeys));
         }
         catch (Exception ex)
         {

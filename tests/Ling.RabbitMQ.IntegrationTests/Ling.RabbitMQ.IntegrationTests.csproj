@@ -18,6 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Ling.RabbitMQ.Consumers\Ling.RabbitMQ.Consumers.csproj" />
+    <ProjectReference Include="..\..\src\Ling.RabbitMQ.Producers\Ling.RabbitMQ.Producers.csproj" />
     <ProjectReference Include="..\..\src\Ling.RabbitMQ\Ling.RabbitMQ.csproj" />
   </ItemGroup>
 

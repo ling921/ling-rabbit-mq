@@ -48,12 +48,12 @@ public abstract class PubSubConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
 
             // Declare a server-named queue
             var queueDeclareResult = await Channel.QueueDeclareAsync(cancellationToken: cancellationToken);
-            var queueName = queueDeclareResult.QueueName;
+            QueueName = queueDeclareResult.QueueName;
 
             await ApplyQosAsync(Channel, cancellationToken);
 
             await Channel.QueueBindAsync(
-                queue: queueName,
+                queue: QueueName,
                 exchange: ExchangeName,
                 routingKey: string.Empty,
                 arguments: null,
@@ -62,13 +62,13 @@ public abstract class PubSubConsumer<TMessage> : RabbitMQConsumerBase<TMessage>
 
             var consumer = CreateConsumer(Channel);
 
-            await Channel.BasicConsumeAsync(
-                queue: queueName,
+            ConsumerTag = await Channel.BasicConsumeAsync(
+                queue: QueueName,
                 autoAck: AutoAck,
                 consumer: consumer,
                 cancellationToken: cancellationToken);
 
-            Logger.LogInformation("Successfully subscribed to exchange '{Exchange}' with queue '{Queue}'", ExchangeName, queueName);
+            Logger.LogInformation("Successfully subscribed to exchange '{Exchange}' with queue '{Queue}'", ExchangeName, QueueName);
         }
         catch (Exception ex)
         {

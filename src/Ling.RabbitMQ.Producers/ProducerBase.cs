@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
 
 namespace Ling.RabbitMQ.Producers;
@@ -18,31 +17,13 @@ public abstract class ProducerBase : RabbitMQServiceBase
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ProducerBase"/> class with the specified connection configuration.
+    /// Initializes a new instance of the <see cref="ProducerBase"/> class with the specified connection, message serializer, and logger factory.
     /// </summary>
-    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
-    protected ProducerBase(RabbitMQOptions connectionConfig) : base(connectionConfig)
-    {
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ProducerBase"/> class with the specified connection configuration and message serializer.
-    /// </summary>
-    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    /// <param name="connection">The RabbitMQ connection.</param>
     /// <param name="serializer">The message serializer.</param>
-    protected ProducerBase(RabbitMQOptions connectionConfig, IMessageSerializer serializer)
-        : base(NullLoggerFactory.Instance, connectionConfig, serializer)
-    {
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ProducerBase"/> class with the specified logger factory, connection configuration, and message serializer.
-    /// </summary>
     /// <param name="loggerFactory">The logger factory.</param>
-    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
-    /// <param name="serializer">The message serializer.</param>
-    protected ProducerBase(ILoggerFactory loggerFactory, RabbitMQOptions connectionConfig, IMessageSerializer serializer)
-        : base(loggerFactory, connectionConfig, serializer)
+    protected ProducerBase(IConnection connection, IMessageSerializer serializer, ILoggerFactory loggerFactory)
+        : base(connection, serializer, loggerFactory)
     {
     }
 

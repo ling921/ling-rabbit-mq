@@ -13,7 +13,7 @@ public abstract class WorkQueueConsumer<TMessage> : RabbitMQConsumerBase<TMessag
     /// <summary>
     /// Gets the name of the queue.
     /// </summary>
-    protected abstract string QueueName { get; }
+    protected override abstract string QueueName { get; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="WorkQueueConsumer{TMessage}"/> class.
@@ -54,7 +54,7 @@ public abstract class WorkQueueConsumer<TMessage> : RabbitMQConsumerBase<TMessag
 
             var consumer = CreateConsumer(Channel);
 
-            await Channel.BasicConsumeAsync(
+            ConsumerTag = await Channel.BasicConsumeAsync(
                 queue: QueueName,
                 autoAck: AutoAck,
                 consumer: consumer,

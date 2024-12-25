@@ -40,29 +40,12 @@ public class PubSubProducer : ProducerBase, IPubSubProducer
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="PubSubProducer"/> class with the specified connection configuration.
+    /// Initializes a new instance of the <see cref="PubSubProducer"/> class with the specified connection, message serializer, and logger factory.
     /// </summary>
-    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
-    public PubSubProducer(RabbitMQOptions connectionConfig) : base(connectionConfig)
-    {
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PubSubProducer"/> class with the specified connection configuration and message serializer.
-    /// </summary>
-    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
+    /// <param name="connection">The RabbitMQ connection.</param>
     /// <param name="serializer">The message serializer.</param>
-    public PubSubProducer(RabbitMQOptions connectionConfig, IMessageSerializer serializer) : base(connectionConfig, serializer)
-    {
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PubSubProducer"/> class with the specified logger factory, connection configuration, and message serializer.
-    /// </summary>
     /// <param name="loggerFactory">The logger factory.</param>
-    /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
-    /// <param name="serializer">The message serializer.</param>
-    public PubSubProducer(ILoggerFactory loggerFactory, RabbitMQOptions connectionConfig, IMessageSerializer serializer) : base(loggerFactory, connectionConfig, serializer)
+    public PubSubProducer(IConnection connection, IMessageSerializer serializer, ILoggerFactory loggerFactory) : base(connection, serializer, loggerFactory)
     {
     }
 

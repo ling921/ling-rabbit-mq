@@ -38,7 +38,7 @@ public class RabbitMQOptions
     public int RequestedHeartbeat { get; set; } = 60;
 
     /// <summary>
-    /// Gets or sets a value indicating whether to automatically recover connections. Defaults to true.
+    /// Gets or sets a value indicating whether to automatically recover connections. Defaults to <see langword="true"/>.
     /// </summary>
     public bool AutomaticRecoveryEnabled { get; set; } = true;
 
@@ -73,7 +73,7 @@ internal sealed class RabbitMQOptionsValidator : IValidateOptions<RabbitMQOption
             errors.Add("HostName is required");
         }
 
-        if (options.Port < 1 || options.Port > 65535)
+        if (options.Port is < 1 or > 65535)
         {
             errors.Add("Port must be between 1 and 65535");
         }
@@ -103,7 +103,7 @@ internal sealed class RabbitMQOptionsValidator : IValidateOptions<RabbitMQOption
             errors.Add("NetworkRecoveryInterval must be greater than or equal to 0");
         }
 
-        if (options.ConsumerDispatchConcurrency < 1 || options.ConsumerDispatchConcurrency > ushort.MaxValue)
+        if (options.ConsumerDispatchConcurrency is < 1 or > ushort.MaxValue)
         {
             errors.Add("ConsumerDispatchConcurrency must be between 1 and 65535");
         }

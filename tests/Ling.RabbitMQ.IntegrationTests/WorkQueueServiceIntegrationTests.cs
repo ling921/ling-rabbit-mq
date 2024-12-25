@@ -1,30 +1,55 @@
+using Ling.RabbitMQ.Consumers;
+using Ling.RabbitMQ.Producers;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using RabbitMQ.Client;
 
 namespace Ling.RabbitMQ.IntegrationTests;
 
 public class WorkQueueServiceIntegrationTests : IAsyncLifetime
 {
+    private static readonly string queueName = $"test_queue_{Guid.NewGuid()}";
+
     private readonly IServiceProvider _serviceProvider;
-    private readonly IWorkQueueService _workQueueService;
     private readonly ILogger<WorkQueueServiceIntegrationTests> _logger;
+    private readonly IWorkQueueProducer _workQueueProducer;
+    private readonly WorkQueueConsumer _workQueueConsumer;
 
     public WorkQueueServiceIntegrationTests()
     {
         var services = new ServiceCollection();
 
         services.AddLogging(builder => builder.AddConsole());
-        services.AddRabbitMQ(options =>
+        services
+            .AddRabbitMQ(options =>
+            {
+                options.HostName = "localhost";
+                options.Port = 5672;
+                options.UserName = "guest";
+                options.Password = "guest";
+            })
+            .AddWorkQueueProducer()
+            .AddWorkQueueConsumer<WorkQueueConsumer, TestMessage>();
+
+        services.TryAddSingleton(sp =>
         {
-            options.HostName = "localhost";
-            options.Port = 5672;
-            options.UserName = "guest";
-            options.Password = "guest";
+            var factory = new ConnectionFactory
+            {
+                HostName = "localhost",
+                Port = 5672,
+                UserName = "guest",
+                Password = "guest",
+            };
+
+            return factory.CreateConnectionAsync().Result;
         });
 
         _serviceProvider = services.BuildServiceProvider();
-        _workQueueService = _serviceProvider.GetRequiredService<IWorkQueueService>();
         _logger = _serviceProvider.GetRequiredService<ILogger<WorkQueueServiceIntegrationTests>>();
+        _workQueueProducer = _serviceProvider.GetRequiredService<IWorkQueueProducer>();
+        _workQueueConsumer = _serviceProvider.GetRequiredService<WorkQueueConsumer>();
     }
 
     [Fact]
@@ -32,37 +57,16 @@ public class WorkQueueServiceIntegrationTests : IAsyncLifetime
     {
         // Arrange
         var message = new TestMessage { Content = "Test Message" };
-        var messageReceived = new TaskCompletionSource<TestMessage>();
-        var queue = $"test_queue_{Guid.NewGuid()}";
+        var messageReceived = new TaskCompletionSource<TestMessage?>();
 
-        // 先设置订阅者
-        await _workQueueService.SubscribeAsync<TestMessage>(
-            queue: queue,
-            handler: async (msg, props, ct) =>
-            {
-                try 
-                {
-                    _logger.LogInformation("Received message: {Content}", msg?.Content);
-                    if (msg != null)
-                    {
-                        messageReceived.TrySetResult(msg);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error processing message");
-                    messageReceived.TrySetException(ex);
-                }
-            },
-            prefetchCount: 1,
-            requeue: false);
+        _workQueueConsumer.MessageReceived += (_, msg) => messageReceived.TrySetResult(msg);
 
-        // 确保订阅者已经设置完成
-        await Task.Delay(1000);
-
-        // 发送消息
-        await _workQueueService.EnqueueAsync(queue, message);
-        _logger.LogInformation("Message enqueued");
+        var tasks = new[]
+        {
+            _workQueueConsumer.StartAsync(CancellationToken.None),
+            _workQueueProducer.InvokeAsync(queueName, message),
+        };
+        await Task.WhenAll(tasks);
 
         // Assert
         var receivedMessage = await messageReceived.Task.WaitAsync(TimeSpan.FromSeconds(50));
@@ -83,5 +87,27 @@ public class WorkQueueServiceIntegrationTests : IAsyncLifetime
     private class TestMessage
     {
         public string Content { get; set; } = string.Empty;
+    }
+
+    private class WorkQueueConsumer : WorkQueueConsumer<TestMessage>
+    {
+        internal event EventHandler<TestMessage?> MessageReceived = default!;
+
+        protected override string QueueName => queueName;
+
+        public WorkQueueConsumer(
+            ILoggerFactory loggerFactory,
+            IMessageSerializer serializer,
+            IOptions<RabbitMQOptions> options)
+            : base(loggerFactory, serializer, options)
+        {
+        }
+
+        protected override Task ConsumeAsync(TestMessage? message, string routingKey, IReadOnlyBasicProperties basicProperties, CancellationToken cancellationToken)
+        {
+            MessageReceived?.Invoke(this, message);
+
+            return Task.CompletedTask;
+        }
     }
 }

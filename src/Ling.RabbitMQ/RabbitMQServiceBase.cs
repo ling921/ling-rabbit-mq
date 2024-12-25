@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Ling.RabbitMQ;
 
@@ -21,7 +22,7 @@ public abstract class RabbitMQServiceBase : IDisposable, IAsyncDisposable
     /// <summary>
     /// Gets the RabbitMQ connection configuration.
     /// </summary>
-    protected RabbitMQOptions ConnectionConfig { get; }
+    protected RabbitMQOptions? ConnectionConfig { get; }
 
     /// <summary>
     /// Gets the RabbitMQ connection instance.
@@ -29,7 +30,7 @@ public abstract class RabbitMQServiceBase : IDisposable, IAsyncDisposable
     /// Ensure to call <see cref="InitializeAsync(CancellationToken)"/> before using this property to prevent null value.
     /// </para>
     /// </summary>
-    protected IConnection Connection { get; private set; } = default!;
+    protected IConnection? Connection { get; private set; }
 
     /// <summary>
     /// Gets the RabbitMQ channel instance.
@@ -37,7 +38,7 @@ public abstract class RabbitMQServiceBase : IDisposable, IAsyncDisposable
     /// Ensure to call <see cref="InitializeAsync(CancellationToken)"/> before using this property to prevent null value.
     /// </para>
     /// </summary>
-    protected IChannel Channel { get; private set; } = default!;
+    protected IChannel? Channel { get; private set; }
 
     /// <summary>
     /// Gets the message serializer instance.
@@ -53,43 +54,52 @@ public abstract class RabbitMQServiceBase : IDisposable, IAsyncDisposable
     /// Initializes a new instance of the <see cref="RabbitMQServiceBase"/> class with the specified connection.
     /// </summary>
     /// <param name="connection">The RabbitMQ connection.</param>
-    protected RabbitMQServiceBase(IConnection connection)
+    protected RabbitMQServiceBase(IConnection connection) : this(connection, new DefaultMessageSerializer(), NullLoggerFactory.Instance)
     {
-        Logger = NullLogger.Instance;
-        ConnectionConfig = default!;
-        Connection = connection;
-        Serializer = new DefaultMessageSerializer();
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQServiceBase"/> class with the specified connection configuration.
     /// </summary>
     /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
-    protected RabbitMQServiceBase(RabbitMQOptions connectionConfig)
+    protected RabbitMQServiceBase(RabbitMQOptions connectionConfig) : this(connectionConfig, new DefaultMessageSerializer(), NullLoggerFactory.Instance)
     {
-        Logger = NullLogger.Instance;
-        ConnectionConfig = connectionConfig;
-        Serializer = new DefaultMessageSerializer();
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RabbitMQServiceBase"/> class with the specified
+    /// connection, serializer, and logger factory.
+    /// </summary>
+    /// <param name="connection">The RabbitMQ connection configuration.</param>
+    /// <param name="serializer">The message serializer.</param>
+    /// <param name="loggerFactory">The logger factory.</param>
+    protected RabbitMQServiceBase(IConnection connection, IMessageSerializer serializer, ILoggerFactory loggerFactory)
+    {
+        Connection = connection;
+        Serializer = serializer;
+        Logger = loggerFactory.CreateLogger(GetType());
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQServiceBase"/> class with the specified
     /// connection configuration, serializer, and logger factory.
     /// </summary>
-    /// <param name="loggerFactory">The logger factory.</param>
     /// <param name="connectionConfig">The RabbitMQ connection configuration.</param>
     /// <param name="serializer">The message serializer.</param>
-    protected RabbitMQServiceBase(ILoggerFactory loggerFactory, RabbitMQOptions connectionConfig, IMessageSerializer serializer)
+    /// <param name="loggerFactory">The logger factory.</param>
+    protected RabbitMQServiceBase(RabbitMQOptions connectionConfig, IMessageSerializer serializer, ILoggerFactory loggerFactory)
     {
-        Logger = loggerFactory.CreateLogger(GetType());
         ConnectionConfig = connectionConfig;
         Serializer = serializer;
+        Logger = loggerFactory.CreateLogger(GetType());
     }
 
     /// <summary>
     /// Initializes the RabbitMQ connection and channel asynchronously.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
+    [MemberNotNull(nameof(Connection), nameof(Channel))]
+#pragma warning disable CS8774 // Member must have a non-null value when exiting.
     protected async ValueTask InitializeAsync(CancellationToken cancellationToken)
     {
         if (Connection is null)
@@ -100,7 +110,7 @@ public abstract class RabbitMQServiceBase : IDisposable, IAsyncDisposable
                 throw new InvalidOperationException("'ConnectionConfig' cannot be null.");
             }
 
-            await _semaphore.WaitAsync(cancellationToken);
+            await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
 
             try
             {
@@ -162,6 +172,7 @@ public abstract class RabbitMQServiceBase : IDisposable, IAsyncDisposable
             }
         }
     }
+#pragma warning restore CS8774 // Member must have a non-null value when exiting.
 
     #region Dispose
 
